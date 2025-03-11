@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors({ origin: 'https://frontend-gestion-de-tareas.vercel.app' }));
+app.use(cors({ origin: 'https://gestiondetareassicorp.netlify.app/' }));
 app.use(express.json());
 
 // Rutas
