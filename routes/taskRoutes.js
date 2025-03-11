@@ -5,7 +5,8 @@ import {
     getTasks, 
     updateTask, 
     deleteTask,
-    markTaskAsFavorite
+    markTaskAsFavorite,
+    completedTask
 } from "../controllers/taskController.js";
 import { validateRequest } from "../middlewares/validateMiddleware.js";
 import { protect } from "../middlewares/authMiddleware.js";
@@ -78,6 +79,19 @@ router.delete(
         validateRequest
     ],
     deleteTask
+);
+
+router.patch(
+    "/:id/completed",
+    protect,
+    [
+        param("id").isMongoId().withMessage("ID de tarea no válido"),
+        body("completed")
+            .notEmpty().withMessage("El valor de complete es obligatorio")
+            .isBoolean().withMessage("El valor de complete debe ser verdadero o falso"),
+        validateRequest
+    ],
+    completedTask
 );
 
 export default router;

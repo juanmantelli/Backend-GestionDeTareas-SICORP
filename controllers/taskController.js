@@ -19,15 +19,30 @@ export const createTask = async (req, res) => {
 
 // Obtener todas las tareas del usuario (con paginación)
 export const getTasks = async (req, res) => {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, filter } = req.query;
+    let query = { user: req.user.id };
+
+    switch (filter) {
+        case 'favorites':
+            query.favorite = true;
+            break;
+        case 'completed':
+            query.completed = true;
+            break;
+        case 'incomplete':
+            query.completed = false;
+            break;
+        default:
+            break;
+    }
 
     try {
-        const tasks = await Task.find({ user: req.user.id })
+        const tasks = await Task.find(query)
             .sort({ createdAt: -1 })
             .limit(limit * 1)
             .skip((page - 1) * limit);
 
-        const total = await Task.countDocuments({ user: req.user.id });
+        const total = await Task.countDocuments(query);
 
         res.json({ tasks, total, page: Number(page), totalPages: Math.ceil(total / limit) });
     } catch (error) {
@@ -91,5 +106,23 @@ export const deleteTask = async (req, res) => {
         res.json({ message: "Tarea eliminada" });
     } catch (error) {
         res.status(500).json({ message: "Error al eliminar la tarea" });
+    }
+};
+
+export const completedTask = async (req, res) => {
+    const { completed } = req.body;
+
+    try {
+        const task = await Task.findById(req.params.id);
+
+        if (!task || task.user.toString() !== req.user.id) {
+            return res.status(404).json({ message: "Tarea no encontrada" });
+        }
+        task.completed = completed;
+        await task.save();
+
+        res.json({ message: "Tarea actualizada", task }); // Enviar respuesta al cliente
+    } catch (error) {
+        res.status(500).json({ message: "Error al actualizar la tarea" });
     }
 };
