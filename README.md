@@ -35,6 +35,7 @@ Crea un archivo **.env** en la raíz del backend y define las siguientes variabl
 MONGO_URI=mongodb+srv://tudb.mongodb.net
 JWT_SECRET=tu_secreto
 PORT=5000
+NODE_ENV=test
 ```
 
 
