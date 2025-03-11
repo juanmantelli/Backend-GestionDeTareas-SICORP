@@ -17,7 +17,7 @@ Este es el backend de una aplicación de gestión de tareas, construido con **No
 ### 1️⃣ Clonar el repositorio  
 
 ```sh
-git clone https://github.com/tu-usuario/tu-repositorio.git
+git clone https://github.com/21martisch/Backend-GestionDeTareas-SICORP.git
 cd backend
 ```
 
