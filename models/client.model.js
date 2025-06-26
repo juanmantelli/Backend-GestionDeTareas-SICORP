@@ -1,12 +1,20 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
-const Usuario = sequelize.define("Usuario", {
+
+const Cliente = sequelize.define("Cliente", {
   nombre: { type: DataTypes.STRING, allowNull: false },
   apellido: { type: DataTypes.STRING, allowNull: false },
   email: { type: DataTypes.STRING, allowNull: false, unique: true },
-  password: { type: DataTypes.STRING, allowNull: false },
-  rol: { type: DataTypes.ENUM("admin", "cliente"), allowNull: false },
+  usuarioId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: "Users",
+      key: "id"
+    }
+  }
 }, { timestamps: true });
 
-export default Usuario;
+
+export default Cliente;

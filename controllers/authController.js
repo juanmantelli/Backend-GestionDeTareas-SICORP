@@ -3,15 +3,15 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 // Generar token
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+const generateToken = (id, rol) => {
+    return jwt.sign({ id, rol }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
 
 export const register = async (req, res) => {
-    const { name, email, password } = req.body;
+    const { nombre, apellido, email, password, rol = "cliente" } = req.body;
 
     try {
-        const userExists = await User.findOne({ email });
+        const userExists = await User.findOne({ where: { email } });
         if (userExists) {
             return res.status(400).json({ message: "El usuario ya existe" });
         }
@@ -20,16 +20,22 @@ export const register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const user = await User.create({
-            name,
+            nombre,
+            apellido,
             email,
             password: hashedPassword,
+            rol,
         });
 
         res.status(201).json({
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            token: generateToken(user._id),
+            user: {
+                id: user.id,
+                nombre: user.nombre,
+                apellido: user.apellido,
+                email: user.email,
+                rol: user.rol,
+            },
+            token: generateToken(user.id, user.rol),
         });
 
     } catch (error) {
@@ -41,14 +47,18 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ where: { email } });
 
         if (user && (await bcrypt.compare(password, user.password))) {
             res.json({
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                token: generateToken(user._id),
+                user: {
+                    id: user.id,
+                    nombre: user.nombre,
+                    apellido: user.apellido,
+                    email: user.email,
+                    rol: user.rol,
+                },
+                token: generateToken(user.id, user.rol),
             });
         } else {
             res.status(400).json({ message: "Credenciales inválidas" });
