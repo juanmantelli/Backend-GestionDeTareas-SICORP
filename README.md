@@ -17,7 +17,7 @@ Este es el backend de una aplicación de gestión de tareas, construido con **No
 ### 1️⃣ Clonar el repositorio  
 
 ```sh
-git clone https://github.com/tu-usuario/tu-repositorio.git
+git clone https://github.com/21martisch/Backend-GestionDeTareas-SICORP.git
 cd backend
 ```
 
@@ -35,6 +35,7 @@ Crea un archivo **.env** en la raíz del backend y define las siguientes variabl
 MONGO_URI=mongodb+srv://tudb.mongodb.net
 JWT_SECRET=tu_secreto
 PORT=5000
+NODE_ENV=test
 ```
 
 
