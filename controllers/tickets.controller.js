@@ -68,7 +68,7 @@ const s3 = new AWS.S3({
 });
 
 export const createTicket = async (req, res) => {
-  const { titulo, descripcion, categoriaId, sistemaId, clienteId } = req.body;
+  const { titulo, descripcion = "", categoriaId, sistemaId, clienteId } = req.body;
   let archivoAdjuntoUrl = null;
   const categoriaAbierto = await Categoria.findOne({ where: { nombre: "Abierto" } });
 
@@ -88,7 +88,7 @@ export const createTicket = async (req, res) => {
 
     const ticket = await Ticket.create({
       titulo,
-      descripcion,
+      descripcion: descripcion || "",
       archivoAdjunto: archivoAdjuntoUrl,
       categoriaId: categoriaAbierto.id,
       sistemaId,
@@ -108,6 +108,7 @@ export const createTicket = async (req, res) => {
 
     res.status(201).json(ticket);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Error en el servidor" });
   }
 };
