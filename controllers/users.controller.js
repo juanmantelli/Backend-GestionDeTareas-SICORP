@@ -66,7 +66,7 @@ export const getUserById = async (req, res) => {
 
 export const updateUser = async (req, res) => {
     const { id } = req.params;
-    const { nombre, rol } = req.body;
+    const { nombre, rol, email, apellido } = req.body;
     try {
         const user = await User.findByPk(id);
         if (!user) {
@@ -74,12 +74,21 @@ export const updateUser = async (req, res) => {
         }
         if (nombre) user.nombre = nombre;
         if (rol) user.rol = rol;
+        if (email) {
+            const existingUser = await User.findOne({ where: { email, id: { [Op.ne]: id } } });
+            if (existingUser) {
+                return res.status(400).json({ message: "El email ya está en uso" });
+            }
+            user.email = email;
+        }
+        if (apellido) user.apellido = apellido;
         await user.save();
         res.json({
             id: user.id,
             nombre: user.nombre,
             email: user.email,
             rol: user.rol,
+            apellido: user.apellido,
         });
     } catch (error) {
         res.status(500).json({ message: "Error en el servidor" });

@@ -41,6 +41,8 @@ router.put(
         param("id").isInt().withMessage("ID inválido"),
         body("nombre").optional().notEmpty(),
         body("rol").optional().isIn(["admin", "cliente"]),
+        body("email").optional().isEmail().withMessage("Debe ser un email válido"),
+        body("apellido").optional().notEmpty().withMessage("El apellido es obligatorio"),
         validateRequest,
     ],
     updateUser
