@@ -1,10 +1,9 @@
 import app from "./app.js";
-import sequelize from "./config/db.js"; // Cambia connectDB por sequelize
+import sequelize from "./config/db.js";
 
 sequelize.authenticate()
   .then(() => {
     console.log("Conexión a MySQL exitosa");
-    // Sincroniza los modelos y crea las tablas si no existen
     return sequelize.sync();
   })
   .then(() => {

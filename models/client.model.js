@@ -10,7 +10,7 @@ const Cliente = sequelize.define("Cliente", {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: "Users",
+      model: "Usuarios",
       key: "id"
     }
   }
