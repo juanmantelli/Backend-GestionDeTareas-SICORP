@@ -2,10 +2,13 @@ import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 
 export const createUser = async (req, res) => {
-    const { name, apellido, email, password, rol } = req.body;
+    const { nombre, apellido, email, password, rol } = req.body;
+
     try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+
         const user = await User.create({
-            name,
+            nombre,
             apellido,
             email,
             password: hashedPassword,
@@ -14,12 +17,17 @@ export const createUser = async (req, res) => {
 
         res.status(201).json({
             id: user.id,
-            name: user.name,
+            nombre: user.nombre,
             apellido: user.apellido,
             email: user.email,
             rol: user.rol,
         });
     } catch (error) {
+        if (error.name === "SequelizeValidationError" || error.name === "SequelizeUniqueConstraintError") {
+            const errors = error.errors.map(e => e.message);
+            return res.status(400).json({ errors });
+        }
+
         res.status(500).json({ message: "Error en el servidor" });
     }
 };
