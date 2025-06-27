@@ -74,13 +74,7 @@ export const updateUser = async (req, res) => {
         }
         if (nombre) user.nombre = nombre;
         if (rol) user.rol = rol;
-        if (email) {
-            const existingUser = await User.findOne({ where: { email, id: { [Op.ne]: id } } });
-            if (existingUser) {
-                return res.status(400).json({ message: "El email ya está en uso" });
-            }
-            user.email = email;
-        }
+        if (email) user.email = email;
         if (apellido) user.apellido = apellido;
         await user.save();
         res.json({
