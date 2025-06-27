@@ -18,7 +18,7 @@ router.use(protect, authorize("admin"));
 router.post(
     "/",
     [
-        body("name").notEmpty().withMessage("El nombre es obligatorio"),
+        body("nombre").notEmpty().withMessage("El nombre es obligatorio"),
         body("email").isEmail().withMessage("Debe ser un email válido"),
         body("password").isLength({ min: 8 }).withMessage("La contraseña debe tener al menos 8 caracteres"),
         body("rol").isIn(["admin", "cliente"]).withMessage("Rol inválido"),
@@ -39,7 +39,7 @@ router.put(
     "/:id",
     [
         param("id").isInt().withMessage("ID inválido"),
-        body("name").optional().notEmpty(),
+        body("nombre").optional().notEmpty(),
         body("rol").optional().isIn(["admin", "cliente"]),
         validateRequest,
     ],

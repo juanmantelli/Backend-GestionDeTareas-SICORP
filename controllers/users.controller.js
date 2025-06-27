@@ -66,18 +66,18 @@ export const getUserById = async (req, res) => {
 
 export const updateUser = async (req, res) => {
     const { id } = req.params;
-    const { name, rol } = req.body;
+    const { nombre, rol } = req.body;
     try {
         const user = await User.findByPk(id);
         if (!user) {
             return res.status(404).json({ message: "Usuario no encontrado" });
         }
-        if (name) user.name = name;
+        if (nombre) user.nombre = nombre;
         if (rol) user.rol = rol;
         await user.save();
         res.json({
             id: user.id,
-            name: user.name,
+            nombre: user.nombre,
             email: user.email,
             rol: user.rol,
         });
