@@ -7,7 +7,6 @@ export const protect = async (req, res, next) => {
     if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
         try {
             token = req.headers.authorization.split(" ")[1];
-            console.log("JWT_SECRET usado:", process.env.JWT_SECRET);
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             req.user = await User.findByPk(decoded.id, {
                 attributes: { exclude: ["password"] }
@@ -19,7 +18,6 @@ export const protect = async (req, res, next) => {
 
             next();
         } catch (error) {
-            console.error("JWT error:", error); // <--- Agrega este log
             return res.status(401).json({ message: "Token no válido" });
         }
     } else {

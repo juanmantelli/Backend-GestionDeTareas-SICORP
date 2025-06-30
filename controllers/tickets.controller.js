@@ -1,4 +1,3 @@
-import AWS from "aws-sdk";
 import fs from "fs";
 import path from "path";
 import Ticket from "../models/ticket.model.js";
@@ -61,39 +60,27 @@ async function registrarHistorial({ ticket, usuarioId, usuarioAsignadoId, accion
   });
 }
 
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION
-});
 
 export const createTicket = async (req, res) => {
-  const { titulo, descripcion = "", categoriaId, sistemaId, clienteId } = req.body;
-  let archivoAdjuntoUrl = null;
+  const { titulo, descripcion = "", categoriaId, sistemaId, clienteId, prioridad, categoriaTipo } = req.body;
   const categoriaAbierto = await Categoria.findOne({ where: { nombre: "Abierto" } });
+  let archivosAdjuntos = [];
+  if (req.files && req.files.length > 0) {
+    archivosAdjuntos = req.files.map(file => file.location);
+  }
 
   try {
-    if (req.file) {
-      const fileContent = fs.readFileSync(req.file.path);
-      const params = {
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Key: Date.now() + path.extname(req.file.originalname),
-        Body: fileContent,
-        ContentType: req.file.mimetype
-      };
-      const data = await s3.upload(params).promise();
-      archivoAdjuntoUrl = data.Location;
-      fs.unlinkSync(req.file.path);
-    }
 
     const ticket = await Ticket.create({
       titulo,
       descripcion: descripcion || "",
-      archivoAdjunto: archivoAdjuntoUrl,
+      archivosAdjuntos,
       categoriaId: categoriaAbierto.id,
       sistemaId,
       clienteId,
-      usuarioId: req.user.id
+      usuarioId: req.user.id,
+      prioridad,
+      categoriaTipo
     });
 
     await registrarHistorial({
@@ -161,23 +148,9 @@ export const updateTicket = async (req, res) => {
   try {
     const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
-    let archivoAdjuntoUrl = ticket.archivoAdjunto;
-    if (req.file) {
-      // Subir nuevo archivo a S3
-      const fileContent = fs.readFileSync(req.file.path);
-      const params = {
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Key: Date.now() + path.extname(req.file.originalname),
-        Body: fileContent,
-        ContentType: req.file.mimetype
-      };
-      const data = await s3.upload(params).promise();
-      archivoAdjuntoUrl = data.Location;
-      fs.unlinkSync(req.file.path);
-
-    }
-    if (archivoAdjuntoUrl !== ticket.archivoAdjunto) {
-      ticket.archivoAdjunto = archivoAdjuntoUrl;
+    let archivosAdjuntos = ticket.archivosAdjuntos || [];
+    if (req.files && req.files.length > 0) {
+      archivosAdjuntos = archivosAdjuntos.concat(req.files.map(file => file.location));
     }
 
     if (req.body.titulo !== undefined) ticket.titulo = req.body.titulo;
@@ -187,6 +160,7 @@ export const updateTicket = async (req, res) => {
     if (req.body.usuarioId !== undefined && req.body.usuarioId !== ticket.usuarioId) {
       ticket.usuarioId = req.body.usuarioId;
     }
+    if (archivosAdjuntos.length > 0) ticket.archivosAdjuntos = archivosAdjuntos;
 
     if (categoriaId && categoriaId !== ticket.categoriaId) {
       const categoriaNombreAnterior = (await Categoria.findByPk(ticket.categoriaId))?.nombre || ticket.categoriaId;
@@ -374,14 +348,13 @@ export const tomarOReasignarTicket = async (req, res) => {
     if (!usuarioId) return res.status(400).json({ message: "usuarioId es requerido" });
 
     const usuarioAnterior = ticket.usuarioId;
-    const esReasignacion = !!usuarioAnterior && usuarioAnterior !== usuarioId;
+    const esReasignacion = usuarioAnterior != null && usuarioAnterior !== usuarioId;
 
     ticket.usuarioId = usuarioId;
     ticket.tomado = true;
 
     await ticket.save();
 
-    // Registrar historial
     await registrarHistorial({
       ticket,
       usuarioId: req.user.id,
@@ -392,7 +365,6 @@ export const tomarOReasignarTicket = async (req, res) => {
       observacion: esReasignacion ? "Ticket reasignado" : "Ticket tomado"
     });
 
-    // Notificar al cliente
     const cliente = await Cliente.findByPk(ticket.clienteId);
     if (cliente) {
       await enviarNotificacion(

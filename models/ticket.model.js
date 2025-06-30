@@ -8,11 +8,23 @@ import User from "./user.model.js";
 const Ticket = sequelize.define("Ticket", {
   titulo: { type: DataTypes.STRING, allowNull: false },
   descripcion: { type: DataTypes.TEXT, allowNull: false },
-  archivoAdjunto: { type: DataTypes.STRING, allowNull: true },
+  archivosAdjuntos: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const raw = this.getDataValue('archivosAdjuntos');
+      return raw ? JSON.parse(raw) : [];
+    },
+    set(val) {
+      this.setDataValue('archivosAdjuntos', JSON.stringify(val));
+    }
+  },
   horasCargadas: { type: DataTypes.FLOAT, allowNull: true, defaultValue: 0 },
   fechaCreacion: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   fechaCierre: { type: DataTypes.DATE, allowNull: true },
   tomado: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  prioridad: {type: DataTypes.ENUM("Alta", "Media", "Baja"),allowNull: false,defaultValue: "Media"},
+  categoriaTipo: {type: DataTypes.ENUM("Soporte", "Desarrollo", "Modificación"),allowNull: false,defaultValue: "Soporte"},
 }, { timestamps: true });
 
 Ticket.belongsTo(Cliente, { foreignKey: "clienteId" });

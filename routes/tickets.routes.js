@@ -18,7 +18,7 @@ const router = express.Router();
 
 router.use(protect);
 
-router.post("/", upload.single("archivoAdjunto"), createTicket);
+router.post("/", upload.array("archivosAdjuntos", 10), createTicket);
 
 router.get("/", getTickets);
 router.get("/:id", getTicketById);
@@ -27,7 +27,7 @@ router.get("/:id/historial", getTicketHistorial);
 router.put('/:id/horas', updateHorasTicket);
 router.post('/:ticketId/comentarios', crearComentario);
 router.get('/:ticketId/comentarios', getComentariosByTicket);
-router.put("/:id", upload.single("archivoAdjunto"), updateTicket);
+router.put("/:id", upload.array("archivosAdjuntos", 10), updateTicket);
 router.patch("/:id/tomar-o-reasignar", tomarOReasignarTicket);
 
 export default router;

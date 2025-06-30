@@ -33,18 +33,21 @@ export const createUser = async (req, res) => {
 };
 
 export const getUsers = async (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
+    const { page = 1, limit = 10, rol } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const where = {};
+    if (rol) where.rol = rol;
     try {
         const { rows: users, count: total } = await User.findAndCountAll({
+            where,
             attributes: { exclude: ["password"] },
-            limit,
+            limit: parseInt(limit),
             offset,
             order: [["createdAt", "DESC"]],
         });
         res.json({ users, total });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: "Error en el servidor" });
     }
 };

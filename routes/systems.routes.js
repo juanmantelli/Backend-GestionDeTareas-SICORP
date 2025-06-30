@@ -4,7 +4,8 @@ import {
   getSistemas,
   getSistemaById,
   updateSistema,
-  deleteSistema
+  deleteSistema,
+  getResumenHorasMensual
 } from "../controllers/systems.controller.js";
 import { protect, authorize } from "../middlewares/authMiddleware.js";
 
@@ -17,5 +18,6 @@ router.get("/", getSistemas);
 router.get("/:id", getSistemaById);
 router.put("/:id", updateSistema);
 router.delete("/:id", deleteSistema);
+router.get("/:id/resumen-horas-mensual", getResumenHorasMensual);
 
 export default router;
