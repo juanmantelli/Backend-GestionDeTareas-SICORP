@@ -99,16 +99,21 @@ export const getResumenHorasMensual = async (req, res) => {
     const meses = [];
     let fecha = new Date(sistema.fechaDesde);
     const fechaHasta = new Date(sistema.fechaHasta);
-    fecha.setDate(1);
 
     while (fecha <= fechaHasta) {
+      const anio = fecha.getFullYear();
+      const mes = fecha.getMonth();
+      const desde = new Date(anio, mes, 1, 0, 0, 0, 0);
+      const hasta = new Date(anio, mes + 1, 0, 23, 59, 59, 999);
+
       meses.push({
-        anio: fecha.getFullYear(),
-        mes: fecha.getMonth() + 1, 
-        desde: new Date(fecha),
-        hasta: new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0, 23, 59, 59, 999)
+        anio,
+        mes: mes + 1,
+        desde,
+        hasta
       });
-      fecha.setMonth(fecha.getMonth() + 1);
+
+      fecha = new Date(anio, mes + 1, 1, 0, 0, 0, 0);
     }
     const resumen = [];
     for (const m of meses) {

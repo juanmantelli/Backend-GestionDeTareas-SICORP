@@ -265,25 +265,29 @@ export const updateHorasTicket = async (req, res) => {
     const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
 
-    if (ticket.sistemaId === null) return res.status(400).json({ message: "El ticket no tiene sistema asociado" });
+    const mes = ticket.fechaCierre ? new Date(ticket.fechaCierre).getMonth() : new Date().getMonth();
+    const anio = ticket.fechaCierre ? new Date(ticket.fechaCierre).getFullYear() : new Date().getFullYear();
 
     const sistema = await Sistema.findByPk(ticket.sistemaId);
-    if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
+    const desde = new Date(anio, mes, 1, 0, 0, 0, 0);
+    const hasta = new Date(anio, mes + 1, 0, 23, 59, 59, 999);
 
-    const horasPrevias = ticket.horasCargadas || 0;
-    const horasNuevas = Number(horasCargadas);
-    const diferencia = horasNuevas - horasPrevias;
-
-    if (diferencia > 0) {
-      if (sistema.horasContrato < diferencia) {
-        return res.status(400).json({ message: "No hay suficientes horas en el contrato" });
+    const ticketsMes = await Ticket.findAll({
+      where: {
+        sistemaId: ticket.sistemaId,
+        fechaCierre: { [Op.between]: [desde, hasta] },
+        id: { [Op.ne]: ticket.id }
       }
-      sistema.horasContrato -= diferencia;
-    } else if (diferencia < 0) {
-      sistema.horasContrato += Math.abs(diferencia);
+    });
+
+    const horasCargadasMes = ticketsMes.reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
+    const totalHoras = horasCargadasMes + Number(horasCargadas);
+
+    if (totalHoras > sistema.horasContrato) {
+      return res.status(400).json({ message: "No puedes cargar más horas que las contratadas para este mes." });
     }
-    ticket.horasCargadas = horasNuevas;
-    await sistema.save();
+
+    ticket.horasCargadas = Number(horasCargadas);
     await ticket.save();
 
     res.json(ticket);
