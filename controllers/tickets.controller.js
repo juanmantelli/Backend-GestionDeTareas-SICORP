@@ -60,7 +60,6 @@ async function registrarHistorial({ ticket, usuarioId, usuarioAsignadoId, accion
   });
 }
 
-
 export const createTicket = async (req, res) => {
   const { titulo, descripcion = "", categoriaId, sistemaId, clienteId, prioridad, categoriaTipo } = req.body;
   const categoriaAbierto = await Categoria.findOne({ where: { nombre: "Abierto" } });
@@ -70,7 +69,6 @@ export const createTicket = async (req, res) => {
   }
 
   try {
-
     const ticket = await Ticket.create({
       titulo,
       descripcion: descripcion || "",
@@ -260,7 +258,7 @@ export const deleteTicket = async (req, res) => {
 };
 
 export const updateHorasTicket = async (req, res) => {
-  const { horasCargadas } = req.body;
+  const { horasCargadas, forzar } = req.body;
   try {
     const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
@@ -269,6 +267,11 @@ export const updateHorasTicket = async (req, res) => {
     const anio = ticket.fechaCierre ? new Date(ticket.fechaCierre).getFullYear() : new Date().getFullYear();
 
     const sistema = await Sistema.findByPk(ticket.sistemaId);
+    if (!sistema) {
+      return res.status(400).json({ message: "No se encontró el sistema" });
+    }
+    const horasContrato = sistema.horasContrato;
+
     const desde = new Date(anio, mes, 1, 0, 0, 0, 0);
     const hasta = new Date(anio, mes + 1, 0, 23, 59, 59, 999);
 
@@ -283,8 +286,11 @@ export const updateHorasTicket = async (req, res) => {
     const horasCargadasMes = ticketsMes.reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
     const totalHoras = horasCargadasMes + Number(horasCargadas);
 
-    if (totalHoras > sistema.horasContrato) {
-      return res.status(400).json({ message: "No puedes cargar más horas que las contratadas para este mes." });
+    if (totalHoras > horasContrato && !forzar) {
+      return res.status(400).json({ 
+        message: "No puedes cargar más horas que las contratadas para este mes.",
+        puedeForzar: true
+      });
     }
 
     ticket.horasCargadas = Number(horasCargadas);

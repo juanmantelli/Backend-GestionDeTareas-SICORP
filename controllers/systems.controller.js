@@ -3,23 +3,21 @@ import Cliente from "../models/client.model.js";
 import Ticket from "../models/ticket.model.js";
 import { Op } from "sequelize";
 
+
 export const createSistema = async (req, res) => {
-  const { nombre, horasContrato, fechaDesde, fechaHasta, clientes } = req.body; 
+  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId } = req.body;
   try {
     const sistema = await Sistema.create({
       nombre,
-      horasContrato,
-      fechaDesde,
-      fechaHasta
+      fechaDesde: req.body.fechaDesde,
+      fechaHasta: req.body.fechaHasta,
+      clienteId,
+      horasContrato
     });
-
-    if (Array.isArray(clientes) && clientes.length > 0) {
-      await sistema.setClientes(clientes);
-    }
-
-    const sistemaConClientes = await Sistema.findByPk(sistema.id, { include: Cliente });
-    res.status(201).json(sistemaConClientes);
+    const sistemaConCliente = await Sistema.findByPk(sistema.id, { include: Cliente });
+    res.status(201).json(sistemaConCliente);
   } catch (error) {
+    console.error("Error al crear sistema:", error);
     res.status(500).json({ message: "Error en el servidor" });
   }
 };
@@ -28,22 +26,9 @@ export const getSistemas = async (req, res) => {
   try {
     const { clienteId } = req.query;
     let where = {};
-    let include = [];
-
-    if (clienteId) {
-      const cliente = await Cliente.findByPk(clienteId, {
-        include: {
-          model: Sistema,
-          through: { attributes: [] },
-          include: [Cliente] 
-        }
-      });
-      if (!cliente) return res.json([]);
-      return res.json(cliente.Sistemas);
-    } else {
-      const sistemas = await Sistema.findAll({ include: Cliente });
-      return res.json(sistemas);
-    }
+    if (clienteId) where.clienteId = clienteId;
+    const sistemas = await Sistema.findAll({ where, include: Cliente });
+    return res.json(sistemas);
   } catch (error) {
     res.status(500).json({ message: "Error en el servidor" });
   }
@@ -60,17 +45,12 @@ export const getSistemaById = async (req, res) => {
 };
 
 export const updateSistema = async (req, res) => {
-  const { nombre, horasContrato, fechaDesde, fechaHasta, clientes } = req.body;
+  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId } = req.body;
   try {
     const sistema = await Sistema.findByPk(req.params.id);
     if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
 
-    await sistema.update({ nombre, horasContrato, fechaDesde, fechaHasta });
-
-
-    if (Array.isArray(clientes)) {
-      await sistema.setClientes(clientes);
-    }
+    await sistema.update({ nombre, horasContrato, fechaDesde, fechaHasta, clienteId });
 
     const sistemaActualizado = await Sistema.findByPk(sistema.id, { include: Cliente });
     res.json(sistemaActualizado);
@@ -91,10 +71,14 @@ export const deleteSistema = async (req, res) => {
 };
 
 export const getResumenHorasMensual = async (req, res) => {
-  const { id } = req.params; // id del sistema
+  const { id } = req.params;
   try {
     const sistema = await Sistema.findByPk(id);
-    if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
+    if (!sistema) {
+      return res.status(404).json({ message: "Sistema no encontrado" });
+    }
+    const horasContrato = sistema.horasContrato;
+    const clienteId = sistema.clienteId;
 
     const meses = [];
     let fecha = new Date(sistema.fechaDesde);
@@ -115,29 +99,32 @@ export const getResumenHorasMensual = async (req, res) => {
 
       fecha = new Date(anio, mes + 1, 1, 0, 0, 0, 0);
     }
+
     const resumen = [];
     for (const m of meses) {
       const tickets = await Ticket.findAll({
         where: {
           sistemaId: sistema.id,
+          clienteId: clienteId,
           fechaCierre: {
             [Op.between]: [m.desde, m.hasta]
           }
         }
       });
+
       const horasConsumidas = tickets.reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
       resumen.push({
         anio: m.anio,
         mes: m.mes,
-        horasContrato: sistema.horasContrato,
+        horasContrato,
         horasConsumidas,
-        horasRestantes: sistema.horasContrato - horasConsumidas
+        horasRestantes: horasContrato - horasConsumidas
       });
     }
 
     res.json(resumen);
   } catch (error) {
-    console.log(error);
+    console.log("Error en getResumenHorasMensual:", error);
     res.status(500).json({ message: "Error al obtener resumen mensual" });
   }
 };
