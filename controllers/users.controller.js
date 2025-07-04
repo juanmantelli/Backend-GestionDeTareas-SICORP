@@ -1,4 +1,5 @@
 import User from "../models/user.model.js";
+import Cliente from "../models/client.model.js";
 import bcrypt from "bcryptjs";
 
 export const createUser = async (req, res) => {
@@ -48,6 +49,7 @@ export const getUsers = async (req, res) => {
         const { rows: users, count: total } = await User.findAndCountAll({
             where,
             attributes: { exclude: ["password"] },
+            include: [{ model: Cliente, as: "cliente" }],
             limit: parseInt(limit),
             offset,
             order: [["createdAt", "DESC"]],
