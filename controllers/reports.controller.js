@@ -9,7 +9,7 @@ export const horasPorCliente = async (req, res) => {
         "clienteId",
         [Sequelize.fn("SUM", Sequelize.col("horasCargadas")), "totalHoras"]
       ],
-      include: [{ model: Cliente, attributes: ["nombre", "apellido", "email"] }],
+      include: [{ model: Cliente, attributes: ["nombre", "email"] }],
       group: ["clienteId", "Cliente.id"]
     });
 

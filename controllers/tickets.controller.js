@@ -78,7 +78,8 @@ export const createTicket = async (req, res) => {
       clienteId,
       usuarioId: req.user.id,
       prioridad,
-      categoriaTipo
+      categoriaTipo,
+      usuarioAsignado: null
     });
 
     await registrarHistorial({
@@ -99,11 +100,12 @@ export const createTicket = async (req, res) => {
 };
 
 export const getTickets = async (req, res) => {
-  const { clienteId, categoriaId, usuarioId, sistemaId, fechaInicio, fechaFin, page = 1, limit = 10 } = req.query;
+  const { clienteId, categoriaId, usuarioId, sistemaId,usuarioAsignado, fechaInicio, fechaFin, page = 1, limit = 10 } = req.query;
   const where = {};
   if (clienteId) where.clienteId = clienteId;
   if (categoriaId) where.categoriaId = categoriaId;
   if (usuarioId) where.usuarioId = usuarioId;
+  if (usuarioAsignado) where.usuarioAsignado = usuarioAsignado;
   if (sistemaId) where.sistemaId = sistemaId;
 
   if (fechaInicio && fechaFin) {
@@ -167,7 +169,7 @@ export const updateTicket = async (req, res) => {
       if (categoriaNombreNueva === "Cerrado" && categoriaNombreAnterior !== "Cerrado") {
         ticket.fechaCierre = new Date();
 
-        const cliente = await Cliente.findByPk(ticket.clienteId);
+        const cliente = await User.findByPk(ticket.usuarioId);
         if (cliente) {
           await enviarNotificacion(
             cliente.email,
@@ -208,7 +210,7 @@ export const updateTicket = async (req, res) => {
       });
       ticket.usuarioId = usuarioId;
       ticket.tomado = true;
-      const cliente = await Cliente.findByPk(ticket.clienteId);
+      const cliente = await User.findByPk(ticket.usuarioId);
       if (cliente) {
         await enviarNotificacion(
           cliente.email,
@@ -349,40 +351,39 @@ export const getComentariosByTicket = async (req, res) => {
   }
 };
 
-export const tomarOReasignarTicket = async (req, res) => {
+export const tomarTicket = async (req, res) => {
   try {
     const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
 
-    const { usuarioId } = req.body;
-    if (!usuarioId) return res.status(400).json({ message: "usuarioId es requerido" });
+    if (ticket.usuarioAsignado) {
+      return res.status(400).json({ message: "El ticket ya fue tomado o asignado." });
+    }
 
-    const usuarioAnterior = ticket.usuarioId;
-    const esReasignacion = usuarioAnterior != null && usuarioAnterior !== usuarioId;
+    const usuario = await User.findByPk(req.user.id);
 
-    ticket.usuarioId = usuarioId;
+    ticket.usuarioAsignado = usuario.nombre + " " + usuario.apellido;;
     ticket.tomado = true;
-
     await ticket.save();
 
     await registrarHistorial({
       ticket,
       usuarioId: req.user.id,
-      usuarioAsignadoId: usuarioId,
-      accion: esReasignacion ? "reasignar" : "tomar",
-      estadoAnterior: usuarioAnterior ? `Usuario anterior: ${usuarioAnterior}` : null,
-      estadoNuevo: `Usuario asignado: ${usuarioId}`,
-      observacion: esReasignacion ? "Ticket reasignado" : "Ticket tomado"
+      usuarioAsignadoId: req.user.id,
+      accion: "tomar",
+      estadoAnterior: null,
+      estadoNuevo: `Usuario asignado: ${usuario.nombre} ${usuario.apellido}`,
+      observacion: "Ticket tomado"
     });
 
-    const cliente = await Cliente.findByPk(ticket.clienteId);
+    const cliente = await User.findByPk(ticket.usuarioId);
     if (cliente) {
       await enviarNotificacion(
         cliente.email,
-        esReasignacion ? "Tu ticket fue reasignado" : "Tu ticket fue tomado",
-        `El ticket "${ticket.titulo}" fue ${esReasignacion ? "reasignado" : "tomado"} por un operador.`,
+        "Tu ticket fue tomado",
+        `El ticket "${ticket.titulo}" fue tomado por un operador.`,
         sicorpEmailTemplate({
-          mensaje: `El ticket <strong>${ticket.titulo}</strong> fue ${esReasignacion ? "reasignado" : "tomado"} por un operador y está en proceso.`,
+          mensaje: `El ticket <strong>${ticket.titulo}</strong> fue tomado por un operador y está en proceso.`,
           tituloTicket: ticket.titulo,
           estadoTicket: "En proceso"
         })
@@ -391,6 +392,57 @@ export const tomarOReasignarTicket = async (req, res) => {
 
     res.json(ticket);
   } catch (error) {
-    res.status(500).json({ message: "Error al tomar o reasignar el ticket" });
+    console.log(error);
+    res.status(500).json({ message: "Error al tomar el ticket" });
+  }
+};
+
+export const reasignarTicket = async (req, res) => {
+  try {
+    const ticket = await Ticket.findByPk(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
+
+    const { usuarioId } = req.body;
+    if (!usuarioId) return res.status(400).json({ message: "usuarioId es requerido" });
+
+    const usuarioNuevo = await User.findByPk(usuarioId);
+    if (!usuarioNuevo) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    const usuarioAnterior = ticket.usuarioAsignado;
+    if (usuarioAnterior === (usuarioNuevo.nombre + " " + usuarioNuevo.apellido)) {
+      return res.status(400).json({ message: "El ticket ya está asignado a ese usuario." });
+    }
+
+    ticket.usuarioAsignado = usuarioNuevo.nombre + " " + usuarioNuevo.apellido;
+    ticket.tomado = true;
+    await ticket.save();
+
+    await registrarHistorial({
+      ticket,
+      usuarioId: req.user.id,
+      usuarioAsignadoId: usuarioId,
+      accion: "reasignar",
+      estadoAnterior: `Usuario anterior: ${usuarioAnterior}`,
+      estadoNuevo: `Usuario asignado: ${usuarioId}`,
+      observacion: "Ticket reasignado"
+    });
+
+    const cliente = await User.findByPk(ticket.usuarioId);
+    if (cliente) {
+      await enviarNotificacion(
+        cliente.email,
+        "Tu ticket fue reasignado",
+        `El ticket "${ticket.titulo}" fue reasignado por un operador.`,
+        sicorpEmailTemplate({
+          mensaje: `El ticket <strong>${ticket.titulo}</strong> fue reasignado por un operador y está en proceso.`,
+          tituloTicket: ticket.titulo,
+          estadoTicket: "En proceso"
+        })
+      );
+    }
+
+    res.json(ticket);
+  } catch (error) {
+    res.status(500).json({ message: "Error al reasignar el ticket" });
   }
 };

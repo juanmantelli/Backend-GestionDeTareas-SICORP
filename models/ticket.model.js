@@ -23,6 +23,7 @@ const Ticket = sequelize.define("Ticket", {
   fechaCreacion: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   fechaCierre: { type: DataTypes.DATE, allowNull: true },
   tomado: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  usuarioAsignado: { type: DataTypes.STRING, allowNull: true },
   prioridad: {type: DataTypes.ENUM("Alta", "Media", "Baja"),allowNull: false,defaultValue: "Media"},
   categoriaTipo: {type: DataTypes.ENUM("Soporte", "Desarrollo", "Modificación"),allowNull: false,defaultValue: "Soporte"},
 }, { timestamps: true });

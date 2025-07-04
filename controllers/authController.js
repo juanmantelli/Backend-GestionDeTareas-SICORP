@@ -34,6 +34,7 @@ export const register = async (req, res) => {
                 apellido: user.apellido,
                 email: user.email,
                 rol: user.rol,
+                clienteId: user.clienteId
             },
             token: generateToken(user.id, user.rol),
         });
@@ -57,6 +58,7 @@ export const login = async (req, res) => {
                     apellido: user.apellido,
                     email: user.email,
                     rol: user.rol,
+                    clienteId: user.clienteId
                 },
                 token: generateToken(user.id, user.rol),
             });
@@ -65,6 +67,7 @@ export const login = async (req, res) => {
         }
 
     } catch (error) {
+        console.log(error);
         res.status(500).json({ message: "Error en el servidor" });
     }
 };

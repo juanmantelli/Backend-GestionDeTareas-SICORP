@@ -1,23 +1,72 @@
 import Sistema from "../models/system.model.js";
 import Cliente from "../models/client.model.js";
+import User from "../models/user.model.js";
 import Ticket from "../models/ticket.model.js";
 import { Op } from "sequelize";
 
 
 export const createSistema = async (req, res) => {
-  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId } = req.body;
+  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId, usuarios = [] } = req.body;
   try {
     const sistema = await Sistema.create({
       nombre,
-      fechaDesde: req.body.fechaDesde,
-      fechaHasta: req.body.fechaHasta,
+      fechaDesde,
+      fechaHasta,
       clienteId,
       horasContrato
     });
-    const sistemaConCliente = await Sistema.findByPk(sistema.id, { include: Cliente });
-    res.status(201).json(sistemaConCliente);
+
+    if (usuarios.length > 0) {
+      const usuariosValidos = await User.findAll({
+        where: {
+          id: usuarios,
+          clienteId
+        }
+      });
+      await sistema.setUsuarios(usuariosValidos.map(u => u.id));
+    }
+
+    const sistemaConClienteYUsuarios = await Sistema.findByPk(sistema.id, {
+      include: [
+        Cliente,
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+      ]
+    });
+    res.status(201).json(sistemaConClienteYUsuarios);
   } catch (error) {
     console.error("Error al crear sistema:", error);
+    res.status(500).json({ message: "Error en el servidor" });
+  }
+};
+
+export const updateSistema = async (req, res) => {
+  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId, usuarios = [] } = req.body;
+  try {
+    const sistema = await Sistema.findByPk(req.params.id);
+    if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
+
+    await sistema.update({ nombre, horasContrato, fechaDesde, fechaHasta, clienteId });
+
+    if (usuarios.length > 0) {
+      const usuariosValidos = await User.findAll({
+        where: {
+          id: usuarios,
+          clienteId
+        }
+      });
+      await sistema.setUsuarios(usuariosValidos.map(u => u.id));
+    } else {
+      await sistema.setUsuarios([]);
+    }
+
+    const sistemaActualizado = await Sistema.findByPk(sistema.id, {
+      include: [
+        Cliente,
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+      ]
+    });
+    res.json(sistemaActualizado);
+  } catch (error) {
     res.status(500).json({ message: "Error en el servidor" });
   }
 };
@@ -27,7 +76,13 @@ export const getSistemas = async (req, res) => {
     const { clienteId } = req.query;
     let where = {};
     if (clienteId) where.clienteId = clienteId;
-    const sistemas = await Sistema.findAll({ where, include: Cliente });
+    const sistemas = await Sistema.findAll({
+      where,
+      include: [
+        Cliente,
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+      ]
+    });
     return res.json(sistemas);
   } catch (error) {
     res.status(500).json({ message: "Error en el servidor" });
@@ -36,24 +91,14 @@ export const getSistemas = async (req, res) => {
 
 export const getSistemaById = async (req, res) => {
   try {
-    const sistema = await Sistema.findByPk(req.params.id, { include: Cliente });
+    const sistema = await Sistema.findByPk(req.params.id, {
+      include: [
+        Cliente,
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+      ]
+    });
     if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
     res.json(sistema);
-  } catch (error) {
-    res.status(500).json({ message: "Error en el servidor" });
-  }
-};
-
-export const updateSistema = async (req, res) => {
-  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId } = req.body;
-  try {
-    const sistema = await Sistema.findByPk(req.params.id);
-    if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
-
-    await sistema.update({ nombre, horasContrato, fechaDesde, fechaHasta, clienteId });
-
-    const sistemaActualizado = await Sistema.findByPk(sistema.id, { include: Cliente });
-    res.json(sistemaActualizado);
   } catch (error) {
     res.status(500).json({ message: "Error en el servidor" });
   }

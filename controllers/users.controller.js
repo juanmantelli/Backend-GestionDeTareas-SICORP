@@ -2,18 +2,24 @@ import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 
 export const createUser = async (req, res) => {
-    const { nombre, apellido, email, password, rol } = req.body;
+    const { nombre, apellido, email, password, rol, clienteId } = req.body; // <-- agregar clienteId
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const user = await User.create({
+        const userData = {
             nombre,
             apellido,
             email,
             password: hashedPassword,
             rol,
-        });
+        };
+
+        if (rol === "cliente" && clienteId) {
+            userData.clienteId = clienteId;
+        }
+
+        const user = await User.create(userData);
 
         res.status(201).json({
             id: user.id,
@@ -21,6 +27,7 @@ export const createUser = async (req, res) => {
             apellido: user.apellido,
             email: user.email,
             rol: user.rol,
+            clienteId: user.clienteId,
         });
     } catch (error) {
         if (error.name === "SequelizeValidationError" || error.name === "SequelizeUniqueConstraintError") {
@@ -69,7 +76,7 @@ export const getUserById = async (req, res) => {
 
 export const updateUser = async (req, res) => {
     const { id } = req.params;
-    const { nombre, rol, email, apellido } = req.body;
+    const { nombre, rol, email, apellido, clienteId } = req.body;
     try {
         const user = await User.findByPk(id);
         if (!user) {
@@ -79,6 +86,15 @@ export const updateUser = async (req, res) => {
         if (rol) user.rol = rol;
         if (email) user.email = email;
         if (apellido) user.apellido = apellido;
+
+        if (clienteId !== undefined) {
+            if ((rol || user.rol) === "cliente") {
+                user.clienteId = clienteId;
+            } else {
+                user.clienteId = null;
+            }
+        }
+
         await user.save();
         res.json({
             id: user.id,
@@ -86,6 +102,7 @@ export const updateUser = async (req, res) => {
             email: user.email,
             rol: user.rol,
             apellido: user.apellido,
+            clienteId: user.clienteId,
         });
     } catch (error) {
         res.status(500).json({ message: "Error en el servidor" });
