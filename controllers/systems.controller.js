@@ -4,16 +4,17 @@ import User from "../models/user.model.js";
 import Ticket from "../models/ticket.model.js";
 import { Op } from "sequelize";
 
-
 export const createSistema = async (req, res) => {
-  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId, usuarios = [] } = req.body;
+  const { nombre, fechaDesde, fechaHasta, clienteId, usuarios = [], horasSoporte, horasDesarrollo, horasModificacion } = req.body;
   try {
     const sistema = await Sistema.create({
       nombre,
       fechaDesde,
       fechaHasta,
       clienteId,
-      horasContrato
+      horasSoporte,
+      horasDesarrollo,
+      horasModificacion
     });
 
     if (usuarios.length > 0) {
@@ -40,12 +41,12 @@ export const createSistema = async (req, res) => {
 };
 
 export const updateSistema = async (req, res) => {
-  const { nombre, horasContrato, fechaDesde, fechaHasta, clienteId, usuarios = [] } = req.body;
+  const { nombre, fechaDesde, fechaHasta, clienteId, usuarios = [], horasSoporte, horasDesarrollo, horasModificacion } = req.body;
   try {
     const sistema = await Sistema.findByPk(req.params.id);
     if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
 
-    await sistema.update({ nombre, horasContrato, fechaDesde, fechaHasta, clienteId });
+    await sistema.update({ nombre, fechaDesde, fechaHasta, clienteId, horasSoporte, horasDesarrollo, horasModificacion });
 
     if (usuarios.length > 0) {
       const usuariosValidos = await User.findAll({
@@ -122,7 +123,6 @@ export const getResumenHorasMensual = async (req, res) => {
     if (!sistema) {
       return res.status(404).json({ message: "Sistema no encontrado" });
     }
-    const horasContrato = sistema.horasContrato;
     const clienteId = sistema.clienteId;
 
     const meses = [];
@@ -157,13 +157,30 @@ export const getResumenHorasMensual = async (req, res) => {
         }
       });
 
-      const horasConsumidas = tickets.reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
+      const horasSoporteConsumidas = tickets
+        .filter(t => t.categoriaTipo === "Soporte")
+        .reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
+
+      const horasDesarrolloConsumidas = tickets
+        .filter(t => t.categoriaTipo === "Desarrollo")
+        .reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
+
+      const horasModificacionConsumidas = tickets
+        .filter(t => t.categoriaTipo === "Modificación")
+        .reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
+
       resumen.push({
         anio: m.anio,
         mes: m.mes,
-        horasContrato,
-        horasConsumidas,
-        horasRestantes: horasContrato - horasConsumidas
+        horasSoporte: sistema.horasSoporte,
+        horasSoporteConsumidas,
+        horasSoporteRestantes: sistema.horasSoporte - horasSoporteConsumidas,
+        horasDesarrollo: sistema.horasDesarrollo,
+        horasDesarrolloConsumidas,
+        horasDesarrolloRestantes: sistema.horasDesarrollo - horasDesarrolloConsumidas,
+        horasModificacion: sistema.horasModificacion,
+        horasModificacionConsumidas,
+        horasModificacionRestantes: sistema.horasModificacion - horasModificacionConsumidas
       });
     }
 

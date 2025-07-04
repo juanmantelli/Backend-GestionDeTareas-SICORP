@@ -265,32 +265,40 @@ export const updateHorasTicket = async (req, res) => {
     const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
 
-    const mes = ticket.fechaCierre ? new Date(ticket.fechaCierre).getMonth() : new Date().getMonth();
-    const anio = ticket.fechaCierre ? new Date(ticket.fechaCierre).getFullYear() : new Date().getFullYear();
-
     const sistema = await Sistema.findByPk(ticket.sistemaId);
     if (!sistema) {
       return res.status(400).json({ message: "No se encontró el sistema" });
     }
-    const horasContrato = sistema.horasContrato;
 
-    const desde = new Date(anio, mes, 1, 0, 0, 0, 0);
-    const hasta = new Date(anio, mes + 1, 0, 23, 59, 59, 999);
+    let campoHoras, horasContratadas;
+    if (ticket.categoriaTipo === "Soporte") {
+      campoHoras = "horasSoporte";
+      horasContratadas = sistema.horasSoporte;
+    } else if (ticket.categoriaTipo === "Desarrollo") {
+      campoHoras = "horasDesarrollo";
+      horasContratadas = sistema.horasDesarrollo;
+    } else if (ticket.categoriaTipo === "Modificación") {
+      campoHoras = "horasModificacion";
+      horasContratadas = sistema.horasModificacion;
+    } else {
+      return res.status(400).json({ message: "Tipo de categoría inválido" });
+    }
 
-    const ticketsMes = await Ticket.findAll({
+    const ticketsCerrados = await Ticket.findAll({
       where: {
-        sistemaId: ticket.sistemaId,
-        fechaCierre: { [Op.between]: [desde, hasta] },
-        id: { [Op.ne]: ticket.id }
+        sistemaId: sistema.id,
+        categoriaTipo: ticket.categoriaTipo,
+        id: { [Op.ne]: ticket.id },
+        fechaCierre: { [Op.not]: null }
       }
     });
+    const horasCargadasOtros = ticketsCerrados.reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
+    const totalHoras = horasCargadasOtros + Number(horasCargadas);
+    const horasRestantes = horasContratadas - totalHoras;
 
-    const horasCargadasMes = ticketsMes.reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
-    const totalHoras = horasCargadasMes + Number(horasCargadas);
-
-    if (totalHoras > horasContrato && !forzar) {
-      return res.status(400).json({ 
-        message: "No puedes cargar más horas que las contratadas para este mes.",
+    if (horasRestantes < 0 && !forzar) {
+      return res.status(400).json({
+        message: `No quedan horas disponibles para este tipo (${campoHoras}). ¿Desea continuar y permitir saldo negativo?`,
         puedeForzar: true
       });
     }

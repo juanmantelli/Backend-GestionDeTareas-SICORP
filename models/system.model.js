@@ -13,10 +13,9 @@ const Sistema = sequelize.define("Sistema", {
       key: "id"
     }
   },
-  horasContrato: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  }
+  horasSoporte: { type: DataTypes.INTEGER, allowNull: false },
+  horasDesarrollo: { type: DataTypes.INTEGER, allowNull: false },
+  horasModificacion: { type: DataTypes.INTEGER, allowNull: false }
 }, { timestamps: true });
 
 export default Sistema;
