@@ -4,6 +4,7 @@ import User from "./user.model.js";
 import Ticket from "./ticket.model.js";
 import Comentario from "./comentario.model.js";
 import SistemaUsuario from "./sistemaUsuario.model.js";
+import Notificacion from "./notificacion.model.js";
 
 Cliente.hasMany(Sistema, { foreignKey: "clienteId" });
 Sistema.belongsTo(Cliente, { foreignKey: "clienteId" });
@@ -16,4 +17,8 @@ User.belongsToMany(Sistema, { through: SistemaUsuario, foreignKey: "usuarioId", 
 
 Comentario.associate && Comentario.associate({ Ticket, User, Comentario });
 
-export { Cliente, Sistema, User, Ticket, Comentario };
+Notificacion.belongsTo(User, { foreignKey: "usuarioId", as: "Usuario" });
+Notificacion.belongsTo(Ticket, { foreignKey: "ticketId", as: "Ticket" });
+Notificacion.belongsTo(Comentario, { foreignKey: "comentarioId", as: "Comentario" });
+
+export { Cliente, Sistema, User, Ticket, Comentario, Notificacion };

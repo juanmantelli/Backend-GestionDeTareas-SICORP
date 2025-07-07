@@ -8,6 +8,7 @@ import sistemasRoutes from "./routes/systems.routes.js";
 import categoriasRoutes from "./routes/categories.routes.js";
 import ticketsRoutes from "./routes/tickets.routes.js";
 import informesRoutes from "./routes/reports.routes.js";
+import notificacionesRoutes from "./routes/notificacion.routes.js";
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ app.use("/api/sistemas", sistemasRoutes);
 app.use("/api/categorias", categoriasRoutes);
 app.use("/api/tickets", ticketsRoutes);
 app.use("/api/informes", informesRoutes);
+app.use("/api/notificaciones", notificacionesRoutes);
 
 // Ruta de prueba
 app.get("/", (req, res) => {

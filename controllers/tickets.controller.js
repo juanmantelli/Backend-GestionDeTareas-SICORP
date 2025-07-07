@@ -6,6 +6,7 @@ import Sistema from "../models/system.model.js";
 import Categoria from "../models/category.model.js";
 import User from "../models/user.model.js";
 import TicketHistorial from "../models/ticketHistorial.js";
+import Notificacion from "../models/notificacion.model.js";
 import { Comentario } from "../models/index.js";
 import { Op } from "sequelize";
 import { transporter } from "../config/mailTransporter.js";
@@ -92,6 +93,29 @@ export const createTicket = async (req, res) => {
       observacion: "Ticket creado"
     });
 
+    const admins = await User.findAll({ where: { rol: "admin" } });
+    for (const admin of admins) {
+      await Notificacion.create({
+        usuarioId: admin.id,
+        ticketId: ticket.id,
+        comentarioId: null,
+        leido: false,
+        fecha: new Date(),
+        tipo: "nuevo_ticket"
+      });
+      await enviarNotificacion(
+        admin.email,
+        "Nuevo ticket creado",
+        `Se ha creado un nuevo ticket: "${ticket.titulo}".`,
+        sicorpEmailTemplate({
+          saludo: `Hola ${admin.nombre},`,
+          mensaje: `Se ha creado un nuevo ticket <strong>${ticket.titulo}</strong>.`,
+          tituloTicket: ticket.titulo,
+          estadoTicket: "Abierto"
+        })
+      );
+    }
+
     res.status(201).json(ticket);
   } catch (error) {
     console.error(error);
@@ -168,20 +192,6 @@ export const updateTicket = async (req, res) => {
 
       if (categoriaNombreNueva === "Cerrado" && categoriaNombreAnterior !== "Cerrado") {
         ticket.fechaCierre = new Date();
-
-        const cliente = await User.findByPk(ticket.usuarioId);
-        if (cliente) {
-          await enviarNotificacion(
-            cliente.email,
-            "Tu ticket fue cerrado",
-            `El ticket "${ticket.titulo}" fue cerrado.`,
-            sicorpEmailTemplate({
-              mensaje: `El ticket <strong>${ticket.titulo}</strong> fue cerrado y está completo.`,
-              tituloTicket: ticket.titulo,
-              estadoTicket: "Cerrado"
-            })
-          );
-        }
       }
 
       await registrarHistorial({
@@ -195,6 +205,28 @@ export const updateTicket = async (req, res) => {
       });
 
       ticket.categoriaId = categoriaId;
+
+      const cliente = await User.findByPk(ticket.usuarioId);
+      if (cliente) {
+        await enviarNotificacion(
+          cliente.email,
+          `Tu ticket cambió de estado a "${categoriaNombreNueva}"`,
+          `El ticket "${ticket.titulo}" cambió de estado a "${categoriaNombreNueva}".`,
+          sicorpEmailTemplate({
+            mensaje: `El ticket <strong>${ticket.titulo}</strong> cambió de estado a <strong>${categoriaNombreNueva}</strong>.`,
+            tituloTicket: ticket.titulo,
+            estadoTicket: categoriaNombreNueva
+          })
+        );
+        await Notificacion.create({
+          usuarioId: cliente.id,
+          ticketId: ticket.id,
+          comentarioId: null,
+          leido: false,
+          fecha: new Date(),
+          tipo: "cambio_estado"
+        });
+      }
     }
 
     if (usuarioId && usuarioId !== ticket.usuarioId) {
@@ -315,13 +347,6 @@ export const updateHorasTicket = async (req, res) => {
 export const crearComentario = async (req, res) => {
   const { texto, parentId } = req.body;
   try {
-    console.log({
-      texto,
-      ticketId: req.params.ticketId,
-      usuarioId: req.user.id,
-      parentId: parentId || null,
-      fecha: new Date()
-    });
     const comentario = await Comentario.create({
       texto,
       ticketId: req.params.ticketId,
@@ -329,10 +354,79 @@ export const crearComentario = async (req, res) => {
       parentId: parentId || null,
       fecha: new Date()
     });
+
     const comentarioCompleto = await Comentario.findByPk(comentario.id, {
-      include: [{ model: User, as: "Usuario", attributes: ["id", "nombre", "email"] }]
+      include: [{ model: User, as: "Usuario", attributes: ["id", "nombre", "apellido", "email"] }]
     });
-    res.status(201).json(comentarioCompleto);
+
+    const ticket = await Ticket.findByPk(req.params.ticketId, {
+      include: [
+        { model: User, as: "Usuario", attributes: ["id", "nombre", "apellido", "email"] }
+      ]
+    });
+
+    let usuarioAsignado = null;
+    if (ticket.usuarioAsignado) {
+      usuarioAsignado = await User.findOne({
+        where: {
+          nombre: ticket.usuarioAsignado.split(" ")[0],
+          apellido: ticket.usuarioAsignado.split(" ")[1]
+        },
+        attributes: ["id", "nombre", "apellido", "email"]
+      });
+    }
+
+    let admins = [];
+    if (!usuarioAsignado) {
+      admins = await User.findAll({ where: { rol: "admin" }, attributes: ["id", "nombre", "apellido", "email"] });
+    }
+
+    const usuariosANotificar = [];
+    if (ticket.Usuario && ticket.Usuario.id !== req.user.id) {
+      usuariosANotificar.push(ticket.Usuario);
+    }
+    if (usuarioAsignado && usuarioAsignado.id !== req.user.id) {
+      usuariosANotificar.push(usuarioAsignado);
+    }
+    if (!usuarioAsignado && admins.length > 0) {
+      admins.forEach(admin => {
+        if (admin.id !== req.user.id) usuariosANotificar.push(admin);
+      });
+    }
+
+    for (const usuario of usuariosANotificar) {
+      await enviarNotificacion(
+        usuario.email,
+        "Nuevo comentario en tu ticket",
+        `Hay un nuevo comentario en el ticket "${ticket.titulo}".`,
+        sicorpEmailTemplate({
+          saludo: `Hola ${usuario.nombre},`,
+          mensaje: `Hay un nuevo comentario en el ticket <strong>${ticket.titulo}</strong>.`,
+          tituloTicket: ticket.titulo,
+          estadoTicket: ticket.Categorium?.nombre || "-"
+        })
+      );
+      await Notificacion.create({
+        usuarioId: usuario.id,
+        ticketId: ticket.id,
+        comentarioId: comentarioCompleto.id,
+        leido: false,
+        fecha: new Date(),
+        tipo: "nuevo_comentario"
+      });
+    }
+
+    res.status(201).json({
+      comentario: comentarioCompleto,
+      ticket: {
+        id: ticket.id,
+        titulo: ticket.titulo,
+        usuarioId: ticket.usuarioId,
+        Usuario: ticket.Usuario,
+        usuarioAsignado: ticket.usuarioAsignado,
+        UsuarioAsignado: usuarioAsignado
+      }
+    });
   } catch (error) {
     console.error("Error al crear comentario:", error);
     res.status(500).json({ message: "Error al crear comentario" });
