@@ -287,7 +287,8 @@ export const deleteTicket = async (req, res) => {
     await ticket.destroy();
     res.json({ message: "Ticket eliminado" });
   } catch (error) {
-    res.status(500).json({ message: "Error en el servidor" });
+    console.error("Error al eliminar ticket:", error);
+    res.status(500).json({ message: "Error al eliminar ticket" });
   }
 };
 
