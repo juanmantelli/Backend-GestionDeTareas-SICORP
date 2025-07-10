@@ -285,8 +285,11 @@ export const deleteTicket = async (req, res) => {
     const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
 
+    await Notificacion.destroy({ where: { ticketId: ticket.id } });
+
     await Comentario.destroy({ where: { ticketId: ticket.id } });
 
+    // Elimina el ticket
     await ticket.destroy();
     res.json({ message: "Ticket eliminado" });
   } catch (error) {
