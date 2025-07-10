@@ -13,7 +13,7 @@ import {
   reasignarTicket
 } from "../controllers/tickets.controller.js";
 import { protect } from "../middlewares/authMiddleware.js";
-import upload, { multerErrorHandler } from "../middlewares/uploadMiddleware.js";
+import upload, { multerErrorHandler, getS3SignedUrl } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
 
@@ -31,5 +31,13 @@ router.get('/:ticketId/comentarios', getComentariosByTicket);
 router.put("/:id", upload.array("archivosAdjuntos"), updateTicket, multerErrorHandler);
 router.post("/:id/tomar",tomarTicket);
 router.post("/:id/reasignar",reasignarTicket);
+router.get("/archivo-url/:key", async (req, res) => {
+  try {
+    const url = await getS3SignedUrl(req.params.key);
+    res.json({ url });
+  } catch (error) {
+    res.status(500).json({ error: "No se pudo generar la URL" });
+  }
+});
 
 export default router;

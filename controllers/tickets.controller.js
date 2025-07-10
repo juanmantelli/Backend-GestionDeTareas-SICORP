@@ -36,7 +36,7 @@ function sicorpEmailTemplate({ saludo = "Hola,", mensaje, tituloTicket, estadoTi
 const enviarNotificacion = async (to, subject, text, html) => {
   try {
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"SICORP Tickets" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       text,
@@ -66,7 +66,7 @@ export const createTicket = async (req, res) => {
   const categoriaAbierto = await Categoria.findOne({ where: { nombre: "Abierto" } });
   let archivosAdjuntos = [];
   if (req.files && req.files.length > 0) {
-    archivosAdjuntos = req.files.map(file => file.location);
+    archivosAdjuntos = req.files.map(file => file.key);
   }
 
   try {
@@ -174,7 +174,7 @@ export const updateTicket = async (req, res) => {
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
     let archivosAdjuntos = ticket.archivosAdjuntos || [];
     if (req.files && req.files.length > 0) {
-      archivosAdjuntos = archivosAdjuntos.concat(req.files.map(file => file.location));
+      archivosAdjuntos = archivosAdjuntos.concat(req.files.map(file => file.key));
     }
 
     if (req.body.titulo !== undefined) ticket.titulo = req.body.titulo;

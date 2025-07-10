@@ -1,6 +1,7 @@
 import multer from "multer";
 import multerS3 from "multer-s3";
-import { S3Client } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
@@ -53,5 +54,13 @@ export const multerErrorHandler = (err, req, res, next) => {
   }
   next();
 };
+
+export async function getS3SignedUrl(key, expiresIn = 3600) {
+  const command = new GetObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME,
+    Key: key,
+  });
+  return await getSignedUrl(s3, command, { expiresIn });
+}
 
 export default upload;
