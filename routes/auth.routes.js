@@ -21,8 +21,8 @@ router.post(
         
         body("email")
             .trim()
-            .isEmail().withMessage("Debe ser un email válido")
-            .normalizeEmail(),
+            .isEmail().withMessage("Debe ser un email válido"),
+            //.normalizeEmail(),
 
         body("password")
             .isLength({ min: 8 }).withMessage("La contraseña debe tener al menos 8 caracteres")
@@ -41,8 +41,8 @@ router.post(
     [
         body("email")
             .trim()
-            .isEmail().withMessage("Debe ser un email válido")
-            .normalizeEmail(),
+            .isEmail().withMessage("Debe ser un email válido"),
+            //.normalizeEmail(),
 
         body("password")
             .notEmpty().withMessage("La contraseña es obligatoria"),
