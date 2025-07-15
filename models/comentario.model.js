@@ -21,7 +21,18 @@ const Comentario = sequelize.define("Comentario", {
   parentId: {
     type: DataTypes.INTEGER,
     allowNull: true,
-  }
+  },
+  archivosAdjuntos: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const raw = this.getDataValue('archivosAdjuntos');
+      return raw ? JSON.parse(raw) : [];
+    },
+    set(val) {
+      this.setDataValue('archivosAdjuntos', JSON.stringify(val));
+    }
+  },
 }, { timestamps: true });
 
 Comentario.associate = (models) => {

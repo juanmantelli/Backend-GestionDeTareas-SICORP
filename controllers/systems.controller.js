@@ -2,38 +2,43 @@ import Sistema from "../models/system.model.js";
 import Cliente from "../models/client.model.js";
 import User from "../models/user.model.js";
 import Ticket from "../models/ticket.model.js";
+import Categoria from "../models/categoria.model.js";
+import SistemaCategoriaHoras from "../models/sistemaCategoria.model.js";
 import { Op } from "sequelize";
 
 export const createSistema = async (req, res) => {
-  const { nombre, fechaDesde, fechaHasta, clienteId, usuarios = [], horasSoporte, horasDesarrollo, horasModificacion } = req.body;
+  const { nombre, fechaDesde, fechaHasta, clienteId, usuarios = [], categoriasHoras = [] } = req.body;
   try {
     const sistema = await Sistema.create({
       nombre,
       fechaDesde,
       fechaHasta,
-      clienteId,
-      horasSoporte,
-      horasDesarrollo,
-      horasModificacion
+      clienteId
     });
 
     if (usuarios.length > 0) {
       const usuariosValidos = await User.findAll({
-        where: {
-          id: usuarios,
-          clienteId
-        }
+        where: { id: usuarios, clienteId }
       });
       await sistema.setUsuarios(usuariosValidos.map(u => u.id));
     }
 
-    const sistemaConClienteYUsuarios = await Sistema.findByPk(sistema.id, {
+    for (const ch of categoriasHoras) {
+      await SistemaCategoriaHoras.create({
+        sistemaId: sistema.id,
+        categoriaId: ch.categoriaId,
+        horasContratadas: ch.horasContratadas
+      });
+    }
+
+    const sistemaCompleto = await Sistema.findByPk(sistema.id, {
       include: [
         Cliente,
-        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] },
+        { model: Categoria, through: { attributes: ["horasContratadas"] } }
       ]
     });
-    res.status(201).json(sistemaConClienteYUsuarios);
+    res.status(201).json(sistemaCompleto);
   } catch (error) {
     console.error("Error al crear sistema:", error);
     res.status(500).json({ message: "Error en el servidor" });
@@ -41,29 +46,36 @@ export const createSistema = async (req, res) => {
 };
 
 export const updateSistema = async (req, res) => {
-  const { nombre, fechaDesde, fechaHasta, clienteId, usuarios = [], horasSoporte, horasDesarrollo, horasModificacion } = req.body;
+  const { nombre, fechaDesde, fechaHasta, clienteId, usuarios = [], categoriasHoras = [] } = req.body;
   try {
     const sistema = await Sistema.findByPk(req.params.id);
     if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
 
-    await sistema.update({ nombre, fechaDesde, fechaHasta, clienteId, horasSoporte, horasDesarrollo, horasModificacion });
+    await sistema.update({ nombre, fechaDesde, fechaHasta, clienteId });
 
     if (usuarios.length > 0) {
       const usuariosValidos = await User.findAll({
-        where: {
-          id: usuarios,
-          clienteId
-        }
+        where: { id: usuarios, clienteId }
       });
       await sistema.setUsuarios(usuariosValidos.map(u => u.id));
     } else {
       await sistema.setUsuarios([]);
     }
 
+    await SistemaCategoriaHoras.destroy({ where: { sistemaId: sistema.id } });
+    for (const ch of categoriasHoras) {
+      await SistemaCategoriaHoras.create({
+        sistemaId: sistema.id,
+        categoriaId: ch.categoriaId,
+        horasContratadas: ch.horasContratadas
+      });
+    }
+
     const sistemaActualizado = await Sistema.findByPk(sistema.id, {
       include: [
         Cliente,
-        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] },
+        { model: Categoria, through: { attributes: ["horasContratadas"] } }
       ]
     });
     res.json(sistemaActualizado);
@@ -81,7 +93,8 @@ export const getSistemas = async (req, res) => {
       where,
       include: [
         Cliente,
-        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] },
+        { model: Categoria, through: { attributes: ["horasContratadas"], as: "SistemaCategoriaHoras"  } }
       ]
     });
     return res.json(sistemas);
@@ -95,7 +108,8 @@ export const getSistemaById = async (req, res) => {
     const sistema = await Sistema.findByPk(req.params.id, {
       include: [
         Cliente,
-        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] }
+        { model: User, as: "usuarios", attributes: ["id", "nombre", "apellido", "email"] },
+        { model: Categoria, through: { attributes: ["horasContratadas"] } }
       ]
     });
     if (!sistema) return res.status(404).json({ message: "Sistema no encontrado" });
@@ -125,6 +139,11 @@ export const getResumenHorasMensual = async (req, res) => {
     }
     const clienteId = sistema.clienteId;
 
+    const categoriasHoras = await SistemaCategoriaHoras.findAll({
+      where: { sistemaId: sistema.id },
+      include: [Categoria]
+    });
+
     const meses = [];
     let fecha = new Date(sistema.fechaDesde);
     const fechaHasta = new Date(sistema.fechaHasta);
@@ -135,13 +154,7 @@ export const getResumenHorasMensual = async (req, res) => {
       const desde = new Date(anio, mes, 1, 0, 0, 0, 0);
       const hasta = new Date(anio, mes + 1, 0, 23, 59, 59, 999);
 
-      meses.push({
-        anio,
-        mes: mes + 1,
-        desde,
-        hasta
-      });
-
+      meses.push({ anio, mes: mes + 1, desde, hasta });
       fecha = new Date(anio, mes + 1, 1, 0, 0, 0, 0);
     }
 
@@ -151,36 +164,27 @@ export const getResumenHorasMensual = async (req, res) => {
         where: {
           sistemaId: sistema.id,
           clienteId: clienteId,
-          fechaCierre: {
-            [Op.between]: [m.desde, m.hasta]
-          }
+          fechaCierre: { [Op.between]: [m.desde, m.hasta] }
         }
       });
 
-      const horasSoporteConsumidas = tickets
-        .filter(t => t.categoriaTipo === "Soporte")
+      const categoriasResumen = categoriasHoras.map(ch => {
+      const horasConsumidas = tickets
+        .filter(t => t.categoriaTipoId === ch.categoriaId)
         .reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
 
-      const horasDesarrolloConsumidas = tickets
-        .filter(t => t.categoriaTipo === "Desarrollo")
-        .reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
-
-      const horasModificacionConsumidas = tickets
-        .filter(t => t.categoriaTipo === "Modificación")
-        .reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
+      return {
+        categoria: ch.Categorium?.nombre || "-",
+        horasContratadas: ch.horasContratadas,
+        horasConsumidas,
+        horasRestantes: ch.horasContratadas - horasConsumidas
+      };
+    });
 
       resumen.push({
         anio: m.anio,
         mes: m.mes,
-        horasSoporte: sistema.horasSoporte,
-        horasSoporteConsumidas,
-        horasSoporteRestantes: sistema.horasSoporte - horasSoporteConsumidas,
-        horasDesarrollo: sistema.horasDesarrollo,
-        horasDesarrolloConsumidas,
-        horasDesarrolloRestantes: sistema.horasDesarrollo - horasDesarrolloConsumidas,
-        horasModificacion: sistema.horasModificacion,
-        horasModificacionConsumidas,
-        horasModificacionRestantes: sistema.horasModificacion - horasModificacionConsumidas
+        categorias: categoriasResumen
       });
     }
 

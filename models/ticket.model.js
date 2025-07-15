@@ -2,7 +2,8 @@ import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 import Cliente from "./client.model.js";
 import Sistema from "./system.model.js";
-import Categoria from "./category.model.js";
+import Estado from "./estado.model.js";
+import Categoria from "./categoria.model.js";
 import User from "./user.model.js";
 
 const Ticket = sequelize.define("Ticket", {
@@ -25,17 +26,19 @@ const Ticket = sequelize.define("Ticket", {
   tomado: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   usuarioAsignado: { type: DataTypes.STRING, allowNull: true },
   prioridad: {type: DataTypes.ENUM("Alta", "Media", "Baja"),allowNull: false,defaultValue: "Media"},
-  categoriaTipo: {type: DataTypes.ENUM("Soporte", "Desarrollo", "Modificación"),allowNull: false,defaultValue: "Soporte"},
+  categoriaTipoId: {type: DataTypes.INTEGER, allowNull: false},
 }, { timestamps: true });
 
 Ticket.belongsTo(Cliente, { foreignKey: "clienteId" });
 Ticket.belongsTo(Sistema, { foreignKey: "sistemaId" });
-Ticket.belongsTo(Categoria, { foreignKey: "categoriaId" });
+Ticket.belongsTo(Estado, { foreignKey: "categoriaId" });
 Ticket.belongsTo(User, { foreignKey: "usuarioId" });
+Ticket.belongsTo(Categoria, { foreignKey: "categoriaTipoId" });
+Categoria.hasMany(Ticket, { foreignKey: "categoriaTipoId" });
 
 Cliente.hasMany(Ticket, { foreignKey: "clienteId" });
 Sistema.hasMany(Ticket, { foreignKey: "sistemaId" });
-Categoria.hasMany(Ticket, { foreignKey: "categoriaId" });
+Estado.hasMany(Ticket, { foreignKey: "categoriaId" });
 User.hasMany(Ticket, { foreignKey: "usuarioId" });
 
 export default Ticket;

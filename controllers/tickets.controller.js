@@ -3,8 +3,10 @@ import path from "path";
 import Ticket from "../models/ticket.model.js";
 import Cliente from "../models/client.model.js";
 import Sistema from "../models/system.model.js";
-import Categoria from "../models/category.model.js";
+import Estado from "../models/estado.model.js";
+import Categoria from "../models/categoria.model.js";
 import User from "../models/user.model.js";
+import SistemaCategoriaHoras from "../models/sistemaCategoria.model.js";
 import TicketHistorial from "../models/ticketHistorial.js";
 import Notificacion from "../models/notificacion.model.js";
 import { Comentario } from "../models/index.js";
@@ -27,7 +29,7 @@ function sicorpEmailTemplate({ saludo = "Hola,", mensaje, tituloTicket, estadoTi
       </div>
       <div style="color:#888;font-size:0.95em;margin-top:32px;text-align:center;">
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0 16px 0;">
-        <div style="margin-bottom:4px;">© ${new Date().getFullYear()} SICORP SRL &middot; <a href="mailto:info@sicorpsrl.com" style="color:#1976d2;text-decoration:none;">info@sicorpsrl.com</a></div>
+        <div style="margin-bottom:4px;">© ${new Date().getFullYear()} SICORP SRL &middot; <a href="mailto:contacto@sicorpsrl.com" style="color:#1976d2;text-decoration:none;">info@sicorpsrl.com</a></div>
       </div>
     </div>
   `;
@@ -62,8 +64,11 @@ async function registrarHistorial({ ticket, usuarioId, usuarioAsignadoId, accion
 }
 
 export const createTicket = async (req, res) => {
-  const { titulo, descripcion = "", categoriaId, sistemaId, clienteId, prioridad, categoriaTipo } = req.body;
-  const categoriaAbierto = await Categoria.findOne({ where: { nombre: "Abierto" } });
+  const { titulo, descripcion = "", categoriaId, sistemaId, clienteId, prioridad, categoriaTipoId } = req.body;
+  const estadoAbierto = await Estado.findOne({ where: { nombre: "Abierto" } });
+  if (!estadoAbierto) {
+    return res.status(400).json({ message: 'No existe el estado "Abierto" en la base de datos.' });
+  }
   let archivosAdjuntos = [];
   if (req.files && req.files.length > 0) {
     archivosAdjuntos = req.files.map(file => file.key);
@@ -74,12 +79,12 @@ export const createTicket = async (req, res) => {
       titulo,
       descripcion: descripcion || "",
       archivosAdjuntos,
-      categoriaId: categoriaAbierto.id,
+      categoriaId: estadoAbierto.id,
       sistemaId,
       clienteId,
       usuarioId: req.user.id,
       prioridad,
-      categoriaTipo,
+      categoriaTipoId,
       usuarioAsignado: null
     });
 
@@ -94,27 +99,32 @@ export const createTicket = async (req, res) => {
     });
 
     const admins = await User.findAll({ where: { rol: "admin" } });
-    for (const admin of admins) {
-      await Notificacion.create({
-        usuarioId: admin.id,
-        ticketId: ticket.id,
-        comentarioId: null,
-        leido: false,
-        fecha: new Date(),
-        tipo: "nuevo_ticket"
-      });
-      await enviarNotificacion(
-        admin.email,
-        "Nuevo ticket creado",
-        `Se ha creado un nuevo ticket: "${ticket.titulo}".`,
-        sicorpEmailTemplate({
-          saludo: `Hola ${admin.nombre},`,
-          mensaje: `Se ha creado un nuevo ticket <strong>${ticket.titulo}</strong>.`,
-          tituloTicket: ticket.titulo,
-          estadoTicket: "Abierto"
+
+    Promise.all([
+      ...admins.map(admin =>
+        Notificacion.create({
+          usuarioId: admin.id,
+          ticketId: ticket.id,
+          comentarioId: null,
+          leido: false,
+          fecha: new Date(),
+          tipo: "nuevo_ticket"
         })
-      );
-    }
+      ),
+      ...admins.map(admin =>
+        enviarNotificacion(
+          admin.email,
+          "Nuevo ticket creado",
+          `Se ha creado un nuevo ticket: "${ticket.titulo}".`,
+          sicorpEmailTemplate({
+            saludo: `Hola ${admin.nombre},`,
+            mensaje: `Se ha creado un nuevo ticket <strong>${ticket.titulo}</strong>.`,
+            tituloTicket: ticket.titulo,
+            estadoTicket: "Abierto"
+          })
+        )
+      )
+    ]).catch(err => console.error("Error enviando notificaciones/correos:", err));
 
     res.status(201).json(ticket);
   } catch (error) {
@@ -124,7 +134,7 @@ export const createTicket = async (req, res) => {
 };
 
 export const getTickets = async (req, res) => {
-  const { clienteId, categoriaId, usuarioId, sistemaId,usuarioAsignado, fechaInicio, fechaFin, page = 1, limit = 10 } = req.query;
+  const { clienteId, categoriaId, usuarioId, sistemaId,usuarioAsignado, fechaInicio, fechaFin, page = 1, limit = 10, soloAbiertos } = req.query;
   const where = {};
   if (clienteId) where.clienteId = clienteId;
   if (categoriaId) where.categoriaId = categoriaId;
@@ -140,11 +150,18 @@ export const getTickets = async (req, res) => {
     where.createdAt = { [Op.lte]: fechaFin };
   }
 
+  if (soloAbiertos === "true") {
+    where[Op.or] = [
+      { '$Estado.nombre$': { [Op.ne]: 'Cerrado' } },
+      { horasCargadas: 0 }
+    ];
+  }
+
   try {
     const offset = (parseInt(page) - 1) * parseInt(limit);
     const { rows: tickets, count: total } = await Ticket.findAndCountAll({
       where,
-      include: [Cliente, Sistema, Categoria, User],
+      include: [Cliente, Sistema, Estado, User, Categoria],
       limit: parseInt(limit),
       offset,
       order: [['id', 'DESC']]
@@ -158,7 +175,7 @@ export const getTickets = async (req, res) => {
 export const getTicketById = async (req, res) => {
   try {
     const ticket = await Ticket.findByPk(req.params.id, {
-      include: [Cliente, Sistema, Categoria, User]
+      include: [Cliente, Sistema, Estado, User, Categoria]
     });
     if (!ticket) return res.status(404).json({ message: "Ticket no encontrado" });
     res.json(ticket);
@@ -187,8 +204,8 @@ export const updateTicket = async (req, res) => {
     if (archivosAdjuntos.length > 0) ticket.archivosAdjuntos = archivosAdjuntos;
 
     if (categoriaId && categoriaId !== ticket.categoriaId) {
-      const categoriaNombreAnterior = (await Categoria.findByPk(ticket.categoriaId))?.nombre || ticket.categoriaId;
-      const categoriaNombreNueva = (await Categoria.findByPk(categoriaId))?.nombre || categoriaId;
+      const categoriaNombreAnterior = (await Estado.findByPk(ticket.categoriaId))?.nombre || ticket.categoriaId;
+      const categoriaNombreNueva = (await Estado.findByPk(categoriaId))?.nombre || categoriaId;
 
       if (categoriaNombreNueva === "Cerrado" && categoriaNombreAnterior !== "Cerrado") {
         ticket.fechaCierre = new Date();
@@ -208,24 +225,26 @@ export const updateTicket = async (req, res) => {
 
       const cliente = await User.findByPk(ticket.usuarioId);
       if (cliente) {
-        await enviarNotificacion(
-          cliente.email,
-          `Tu ticket cambió de estado a "${categoriaNombreNueva}"`,
-          `El ticket "${ticket.titulo}" cambió de estado a "${categoriaNombreNueva}".`,
-          sicorpEmailTemplate({
-            mensaje: `El ticket <strong>${ticket.titulo}</strong> cambió de estado a <strong>${categoriaNombreNueva}</strong>.`,
-            tituloTicket: ticket.titulo,
-            estadoTicket: categoriaNombreNueva
+        Promise.all([
+          enviarNotificacion(
+            cliente.email,
+            `Tu ticket cambió de estado a "${categoriaNombreNueva}"`,
+            `El ticket "${ticket.titulo}" cambió de estado a "${categoriaNombreNueva}".`,
+            sicorpEmailTemplate({
+              mensaje: `El ticket <strong>${ticket.titulo}</strong> cambió de estado a <strong>${categoriaNombreNueva}</strong>.`,
+              tituloTicket: ticket.titulo,
+              estadoTicket: categoriaNombreNueva
+            })
+          ),
+          Notificacion.create({
+            usuarioId: cliente.id,
+            ticketId: ticket.id,
+            comentarioId: null,
+            leido: false,
+            fecha: new Date(),
+            tipo: "cambio_estado"
           })
-        );
-        await Notificacion.create({
-          usuarioId: cliente.id,
-          ticketId: ticket.id,
-          comentarioId: null,
-          leido: false,
-          fecha: new Date(),
-          tipo: "cambio_estado"
-        });
+        ]).catch(err => console.error("Error enviando notificaciones/correos:", err));
       }
     }
 
@@ -289,7 +308,6 @@ export const deleteTicket = async (req, res) => {
 
     await Comentario.destroy({ where: { ticketId: ticket.id } });
 
-    // Elimina el ticket
     await ticket.destroy();
     res.json({ message: "Ticket eliminado" });
   } catch (error) {
@@ -309,28 +327,30 @@ export const updateHorasTicket = async (req, res) => {
       return res.status(400).json({ message: "No se encontró el sistema" });
     }
 
-    let campoHoras, horasContratadas;
-    if (ticket.categoriaTipo === "Soporte") {
-      campoHoras = "horasSoporte";
-      horasContratadas = sistema.horasSoporte;
-    } else if (ticket.categoriaTipo === "Desarrollo") {
-      campoHoras = "horasDesarrollo";
-      horasContratadas = sistema.horasDesarrollo;
-    } else if (ticket.categoriaTipo === "Modificación") {
-      campoHoras = "horasModificacion";
-      horasContratadas = sistema.horasModificacion;
-    } else {
-      return res.status(400).json({ message: "Tipo de categoría inválido" });
+    const categoriaHoras = await SistemaCategoriaHoras.findOne({
+      where: {
+        sistemaId: sistema.id,
+        categoriaId: ticket.categoriaTipoId
+      },
+      include: [Categoria]
+    });
+
+    if (!categoriaHoras) {
+      return res.status(400).json({ message: "No se encontraron horas contratadas para esta categoría en el sistema" });
     }
+
+    const horasContratadas = categoriaHoras.horasContratadas;
+    const campoHoras = categoriaHoras.Categoria?.nombre || "Categoría";
 
     const ticketsCerrados = await Ticket.findAll({
       where: {
         sistemaId: sistema.id,
-        categoriaTipo: ticket.categoriaTipo,
+        categoriaTipoId: ticket.categoriaTipoId,
         id: { [Op.ne]: ticket.id },
         fechaCierre: { [Op.not]: null }
       }
     });
+
     const horasCargadasOtros = ticketsCerrados.reduce((sum, t) => sum + (t.horasCargadas || 0), 0);
     const totalHoras = horasCargadasOtros + Number(horasCargadas);
     const horasRestantes = horasContratadas - totalHoras;
@@ -352,14 +372,27 @@ export const updateHorasTicket = async (req, res) => {
 };
 
 export const crearComentario = async (req, res) => {
-  const { texto, parentId } = req.body;
+  let { texto, parentId } = req.body;
+
+  if (typeof texto !== "string") {
+    if (Array.isArray(texto)) texto = texto[0];
+    else if (typeof texto === "object" && texto !== null) texto = "";
+    else texto = String(texto);
+  }
+
+  let archivosAdjuntos = [];
+  if (req.files && req.files.length > 0) {
+    archivosAdjuntos = req.files.map(file => file.key || file.filename || file.path);
+  }
+
   try {
     const comentario = await Comentario.create({
       texto,
       ticketId: req.params.ticketId,
       usuarioId: req.user.id,
       parentId: parentId || null,
-      fecha: new Date()
+      fecha: new Date(),
+      archivosAdjuntos 
     });
 
     const comentarioCompleto = await Comentario.findByPk(comentario.id, {
@@ -401,27 +434,31 @@ export const crearComentario = async (req, res) => {
       });
     }
 
-    for (const usuario of usuariosANotificar) {
-      await enviarNotificacion(
-        usuario.email,
-        "Nuevo comentario en tu ticket",
-        `Hay un nuevo comentario en el ticket "${ticket.titulo}".`,
-        sicorpEmailTemplate({
-          saludo: `Hola ${usuario.nombre},`,
-          mensaje: `Hay un nuevo comentario en el ticket <strong>${ticket.titulo}</strong>.`,
-          tituloTicket: ticket.titulo,
-          estadoTicket: ticket.Categorium?.nombre || "-"
-        })
-      );
-      await Notificacion.create({
-        usuarioId: usuario.id,
-        ticketId: ticket.id,
-        comentarioId: comentarioCompleto.id,
-        leido: false,
-        fecha: new Date(),
-        tipo: "nuevo_comentario"
-      });
-    }
+    Promise.all(
+      usuariosANotificar.map(usuario =>
+        Promise.all([
+          enviarNotificacion(
+            usuario.email,
+            "Nuevo comentario en tu ticket",
+            `Hay un nuevo comentario en el ticket "${ticket.titulo}".`,
+            sicorpEmailTemplate({
+              saludo: `Hola ${usuario.nombre},`,
+              mensaje: `Hay un nuevo comentario en el ticket <strong>${ticket.titulo}</strong>.`,
+              tituloTicket: ticket.titulo,
+              estadoTicket: ticket.Categorium?.nombre || "-"
+            })
+          ),
+          Notificacion.create({
+            usuarioId: usuario.id,
+            ticketId: ticket.id,
+            comentarioId: comentarioCompleto.id,
+            leido: false,
+            fecha: new Date(),
+            tipo: "nuevo_comentario"
+          })
+        ])
+      )
+    ).catch(err => console.error("Error enviando notificaciones/correos:", err));
 
     res.status(201).json({
       comentario: comentarioCompleto,
@@ -471,8 +508,14 @@ export const tomarTicket = async (req, res) => {
 
     const usuario = await User.findByPk(req.user.id);
 
-    ticket.usuarioAsignado = usuario.nombre + " " + usuario.apellido;;
+    const estadoEnProceso = await Estado.findOne({ where: { nombre: "En Proceso" } });
+    if (!estadoEnProceso) {
+      return res.status(400).json({ message: 'No existe el estado "En Proceso" en la base de datos.' });
+    }
+
+    ticket.usuarioAsignado = usuario.nombre + " " + usuario.apellido;
     ticket.tomado = true;
+    ticket.categoriaId = estadoEnProceso.id;
     await ticket.save();
 
     await registrarHistorial({
@@ -487,7 +530,7 @@ export const tomarTicket = async (req, res) => {
 
     const cliente = await User.findByPk(ticket.usuarioId);
     if (cliente) {
-      await enviarNotificacion(
+      enviarNotificacion(
         cliente.email,
         "Tu ticket fue tomado",
         `El ticket "${ticket.titulo}" fue tomado por un operador.`,
@@ -538,7 +581,7 @@ export const reasignarTicket = async (req, res) => {
 
     const cliente = await User.findByPk(ticket.usuarioId);
     if (cliente) {
-      await enviarNotificacion(
+      enviarNotificacion(
         cliente.email,
         "Tu ticket fue reasignado",
         `El ticket "${ticket.titulo}" fue reasignado por un operador.`,

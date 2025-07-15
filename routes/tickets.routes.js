@@ -26,7 +26,7 @@ router.get("/:id", getTicketById);
 router.delete("/:id", deleteTicket);
 router.get("/:id/historial", getTicketHistorial);
 router.put('/:id/horas', updateHorasTicket);
-router.post('/:ticketId/comentarios', crearComentario);
+router.post('/:ticketId/comentarios',upload.array('archivosAdjuntos'), crearComentario, multerErrorHandler);
 router.get('/:ticketId/comentarios', getComentariosByTicket);
 router.put("/:id", upload.array("archivosAdjuntos"), updateTicket, multerErrorHandler);
 router.post("/:id/tomar",tomarTicket);
