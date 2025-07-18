@@ -16,7 +16,7 @@ dotenv.config();
 const app = express();
 
 // Middleware
-const allowedOrigins = ['https://testing-tickets-sicorp.netlify.app', 'http://localhost:5173'];
+const allowedOrigins = ['https://tickets-sicorp.netlify.app', 'http://localhost:5173'];
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
